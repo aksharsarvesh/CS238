@@ -23,8 +23,9 @@ def load_graph(path):
 
 def draw_graph(path):
     G = load_graph(path)
-    nx.draw_circular(G, with_labels=True, font_weight='bold')
-    plt.show()
+    nx.write_latex(G, f'{path}.tex', caption=f'{path}', as_document=True)
+    # nx.draw_circular(G, with_labels=True, font_weight='bold')
+    # plt.show()
     
 if __name__ == "__main__":
     cases = ['small', 'medium','large']
