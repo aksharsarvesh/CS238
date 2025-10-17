@@ -3,6 +3,7 @@ density,color
 color,fixedacidity
 density,fixedacidity
 alcohol,fixedacidity
+residualsugar,fixedacidity
 color,volatileacidity
 citricacid,volatileacidity
 alcohol,volatileacidity
@@ -17,10 +18,12 @@ color,chlorides
 alcohol,chlorides
 density,chlorides
 totalsulfurdioxide,freesulfurdioxide
+quality,freesulfurdioxide
 density,totalsulfurdioxide
 color,pH
 fixedacidity,pH
 color,sulphates
+quality,sulphates
 density,alcohol
 color,alcohol
 alcohol,quality
