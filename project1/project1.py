@@ -3,7 +3,7 @@ from itertools import product
 import pandas as pd
 import random
 
-def state_names(df: pd.DataFrame):
+def get_state_names(df: pd.DataFrame):
     
     state_names = {}
     for col in df.columns:
@@ -89,7 +89,7 @@ def build_graph_from_edges(
 
 def k2_search(case: str):
     data = pd.read_csv(f'data/{case}.csv')
-    state_names = state_names(data)
+    state_names = get_state_names(data)
     data = ensure_categorical(data, state_names)
 
     with open(f'{case}.gph', 'r') as f:
