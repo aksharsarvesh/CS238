@@ -2,7 +2,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from project1.project1 import build_graph_from_edges
+from project1 import build_graph_from_edges
 
 def load_graph(path):
     
