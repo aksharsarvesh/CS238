@@ -3,14 +3,10 @@ from itertools import product
 import pandas as pd
 import random
 
-def infer_state_names(df: pd.DataFrame):
-    """
-    Infer discrete state names for each column from the data.
-    Ensures deterministic ordering.
-    """
+def state_names(df: pd.DataFrame):
+    
     state_names = {}
     for col in df.columns:
-        # Use pandas Categorical if already set; otherwise unique values
         if isinstance(df[col].dtype, pd.api.types.CategoricalDtype):
             state_names[col] = list(df[col].cat.categories)
         else:
@@ -32,7 +28,6 @@ def save_graph(g: dict[str, list[str]], path: str):
         for parent in parents:
             lines.append(f"{parent},{child}")
 
-    # Write all edges to file
     with open(path, "w") as f:
         f.write("\n".join(lines))
 
@@ -42,7 +37,7 @@ def local_k2_score(data, child: str, parents: list[str], state_names: dict[str, 
     
     log_score = 0.0
     r_i = len(state_names[child])
-    alpha_ijk = 1  # K2 prior
+    alpha_ijk = 1 
 
     parent_state_lists = [state_names[p] for p in parents] if parents else [()]
     parent_configs = list(product(*parent_state_lists)) if parents else [()]
@@ -94,7 +89,7 @@ def build_graph_from_edges(
 
 def k2_search(case: str):
     data = pd.read_csv(f'data/{case}.csv')
-    state_names = infer_state_names(data)
+    state_names = state_names(data)
     data = ensure_categorical(data, state_names)
 
     with open(f'{case}.gph', 'r') as f:
@@ -128,9 +123,9 @@ def k2_search(case: str):
 
     def commit_edge_and_update(parent: str, child: str):
         u, v = idx[parent], idx[child]
-        # ancestors of parent (incl. parent)
+        # ancestors of parent 
         anc = [a for a in range(n) if a == u or canReach[a][u]]
-        # descendants of child (incl. child)
+        # descendants of child 
         desc = [d for d in range(n) if d == v or canReach[v][d]]
         for a in anc:
             row = canReach[a]
@@ -138,56 +133,65 @@ def k2_search(case: str):
                 row[d] = True
         g[child].append(parent)
 
-    def descendants_of(node: str):
-        v = idx[node]
-        return [vars_list[d] for d in range(n) if canReach[v][d]]
-
     best_path = f'{case}.gph'
     score_components = {}
     best_score = k2_score(data, g, state_names, score_components)
     print(best_score)
 
     score = best_score
-    active_children = set(vars_list)
+
+    children_best_delta  = {c: 0.0  for c in vars_list}   
+    children_best_parent = {c: None for c in vars_list}   
+
+    recompute = set(vars_list)
 
     while True:
         best_edge = None
         best_edge_score = 0.0
+        
+        for child in vars_list:
+            if child in recompute:
+                local_best_delta = 0.0
+                local_best_parent = None
 
-        active_list = list(active_children)
-        for ci, child in enumerate(active_list, start=1):
-            child_best_delta = 0.0
-            child_best_parent = None
+                for parent in vars_list:
+                    if parent == child or parent in g[child] or would_cycle(parent, child):
+                        continue
+                    
+                    candidate = recompute_k2(data, g, parent, child, state_names, score_components)
+                    if candidate > local_best_delta:
+                        local_best_delta = candidate
+                        local_best_parent = parent
 
-            for parent in vars_list:
-                if parent == child or parent in g[child] or would_cycle(parent, child):
-                    continue
+                children_best_delta[child]  = local_best_delta
+                children_best_parent[child] = local_best_parent
 
-                candidate = recompute_k2(data, g, parent, child, state_names, score_components)
-                if candidate > child_best_delta:
-                    child_best_delta = candidate
-                    child_best_parent = parent
+                print(f'Scanned child {child}. Best edge delta: {children_best_delta[child]:.6f}')
+            
+            # pick global best using cached (or just-updated) values
+            if children_best_delta[child] > best_edge_score:
+                best_edge_score = children_best_delta[child]
+                best_parent = children_best_parent[child]
+                best_edge = (best_parent, child) if best_parent is not None else None
 
-            print(f'Scanned child {child} ({ci}/{len(active_list)}). '
-                  f'Best edge delta: {child_best_delta:.6f}')
-
-            # Track global best for this round
-            if child_best_delta > best_edge_score:
-                best_edge_score = child_best_delta
-                best_edge = (child_best_parent, child) if child_best_parent is not None else None
-
-        print(f'Active children this round: {len(active_children)}')
 
         if best_edge is not None and best_edge_score > 0:
             p, c = best_edge
-            commit_edge_and_update(p, c)
-            score_components[c] += best_edge_score
-            score += best_edge_score
-            print(f'New Best Score: {score}')
-            save_graph(g, 'large_cache.gph')
-            next_active = set([c] + descendants_of(c))
-            active_children = next_active
-            print(f'Active children for next round: {len(active_children)}')
+
+            if would_cycle(p, c):
+                # This can happen if constraints changed between compute and commit.
+                # Invalidate this child's cached choice and recompute next loop.
+                children_best_delta[c] = 0.0
+                children_best_parent[c] = None
+                # Recompute only this child next iteration  
+            else:
+                commit_edge_and_update(p, c)
+                score_components[c] += best_edge_score
+                score += best_edge_score
+                print(f'New Best Score: {score}')
+                save_graph(g, 'large_cache.gph')
+            recompute = {c}
+
         else:
             break
 
@@ -195,12 +199,11 @@ def k2_search(case: str):
     if score > best_score:
         save_graph(g, best_path)
 
+
         
         
-# ------- Example usage -------
 if __name__ == "__main__":
-    # Toy dataset: all variables are discrete
-    cases = ['large']
+    cases = ['small', 'medium', 'large']
     for case in cases:
         k2_search(case)
     # data = pd.read_csv("data/medium.csv")
